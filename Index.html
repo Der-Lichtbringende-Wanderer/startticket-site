@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Startticket – Multi-Gruppe (PayPal, Host-verifiziert)</title>
+  <meta name="description" content="Reservierungs-Kaution – PayPal-only. Kritische Werte serverseitig aus einem Host-Sheet." />
+  <meta name="theme-color" content="#123F32" />
+  <style>
+    :root{--green:#123F32;--gold:#D4AF37;--paper:#F7F6F2;--ink:#0f2e26}
+    *{box-sizing:border-box} html,body{height:100%}
+    body{margin:0;font-family:system-ui,-apple-system,'Segoe UI',Roboto,Ubuntu,Cantarell,'Helvetica Neue',Arial;background:var(--paper);color:var(--ink)}
+    .wrap{max-width:980px;margin-inline:auto;padding:24px}
+    header{background:var(--green);color:var(--gold);border-radius:22px;padding:22px 24px;display:flex;align-items:center;gap:14px;margin-top:18px}
+    header .logo{font-size:30px} h1{margin:0;font-size:clamp(22px,3.4vw,36px)}
+    .card{background:#fff;border:2px solid var(--green);border-radius:22px;padding:20px;margin:18px 0;box-shadow:0 10px 30px rgba(0,0,0,.06)}
+    .grid{display:grid;grid-template-columns:1.2fr .8fr;gap:16px} @media (max-width:880px){.grid{grid-template-columns:1fr}}
+    .price{font-size:40px;font-weight:800;color:var(--green)}
+    .btn{appearance:none;border:none;background:var(--green);color:var(--gold);padding:14px 18px;border-radius:12px;font-weight:800;cursor:pointer;text-decoration:none;display:inline-block}
+    .btn.secondary{background:#eceae3;color:var(--green);border:2px solid var(--green)}
+    .badge{display:inline-grid;place-items:center;background:var(--gold);color:var(--green);border-radius:10px;padding:4px 8px;font-weight:800}
+    footer{color:var(--gold);background:var(--green);border-radius:18px;padding:12px 16px;margin-top:18px;display:flex;justify-content:space-between;align-items:center}
+    .small{font-size:12px;opacity:.8}.muted{opacity:.8}.mono{font-family:ui-monospace,Consolas,Menlo,monospace}
+    .error{border:2px solid #a83b3b;background:#fff2f2;color:#741f1f;border-radius:12px;padding:12px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="logo" id="logo">🧭⚓️</div>
+      <div>
+        <h1 id="title">Startticket – Garantierter Platz</h1>
+        <p class="muted" id="subtitle">Fair. Verbindlich. Einfach reserviert.</p>
+      </div>
+    </header>
+
+    <section class="card" id="statusBox" hidden>
+      <div id="statusMsg" class="error">Lade Host-Daten…</div>
+    </section>
+
+    <section class="card" id="ticketView" hidden>
+      <div class="grid">
+        <div>
+          <h2 id="groupHeadline">Dein Startticket</h2>
+          <p>
+            Mit der <strong>Reservierungs-Kaution</strong> sicherst du dir verbindlich einen Platz.
+            Bei Teilnahme erstatten wir <strong>100&nbsp;%</strong> –
+            <span id="donateInline" style="display:none">oder du lässt den Betrag freiwillig als <strong>Spende/Energieausgleich</strong> stehen.</span>
+            Bei Nichterscheinen verfällt die Kaution.
+          </p>
+          <p class="price" id="priceBox">5,00&nbsp;€</p>
+          <p>
+            <a class="btn" id="payBtn" href="#" target="_blank" rel="noopener">Jetzt reservieren (PayPal)</a>
+            <a class="btn secondary" id="formBtn" href="#" target="_blank" rel="noopener">Nach dem Kauf: Daten eintragen</a>
+          </p>
+          <p class="small" id="capInfo"></p>
+        </div>
+        <div>
+          <div class="card" style="min-height:100%">
+            <span class="badge">So läuft’s</span>
+            <ol>
+              <li>Kaufen: Button klicken → Zahlung <b>(PayPal)</b>.</li>
+              <li>Eintragen: Bestell-ID + Name + Wunsch-Tour im Formular.</li>
+              <li>Bestätigung: Du erhältst eine E-Mail der Hosts.</li>
+              <li>Teilnahme: 100&nbsp;% Erstattung
+                <span id="donateList" style="display:none">oder auf Wunsch als <b>Spende/Energieausgleich</b> stehen lassen</span>.
+              </li>
+            </ol>
+            <div class="small" id="transferNote" style="opacity:.8">Keine Umbuchung. Optional: Übertragung bis T-24 h per Formular.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="noHost" hidden>
+      <h2>Host-Link ungültig</h2>
+      <p>Dieser Link braucht <code>?host=DEINE_HOST_ID</code>. Bitte nutze den offiziellen Ticket-Link aus der Eventbeschreibung.</p>
+    </section>
+
+    <footer>
+      <small>© Startticket – Multi-Gruppe (MVP) • PayPal-only</small>
+      <small class="mono">V2 • Host-verifiziert • kein Tracking</small>
+    </footer>
+  </div>
+
+  <script>
+    const WEBAPP_URL = "PASTE_WEBAPP_URL_HERE"; // <-- HIER deine Apps-Script-URL (endet auf /exec)
+    const qs = new URLSearchParams(location.search);
+    const $ = id => document.getElementById(id);
+    const host = (qs.get('host')||'').trim();
+
+    function setText(id,val){ const el=$(id); if(el) el.textContent=val; }
+    function setHref(id,href){ const el=$(id); if(el) el.setAttribute('href',href); }
+    function show(id,on=true){ const el=$(id); if(el) el.hidden=!on; }
+    function money(v){ try{ return new Intl.NumberFormat('de-DE',{style:'currency',currency:'EUR'}).format(Number(v||0)); }catch(e){ return (Number(v||0).toFixed(2)+' €'); } }
+
+    function loadHostViaJSONP(host, cb){
+      const cbName = '__hostCB_' + Math.random().toString(36).slice(2);
+      window[cbName] = (data)=>{ try{ cb(null,data); } finally { delete window[cbName]; s.remove(); } };
+      const s = document.createElement('script');
+      s.src = WEBAPP_URL + '?host=' + encodeURIComponent(host) + '&callback=' + cbName;
+      s.onerror = ()=>{ cb(new Error('Netzwerkfehler')); s.remove(); };
+      document.head.appendChild(s);
+    }
+
+    function render(data){
+      const {group, logo, pay, form, price, cap, donate, transfer, tform, color, gold, sub} = data;
+      if(color){ document.documentElement.style.setProperty('--green', color); }
+      if(gold){  document.documentElement.style.setProperty('--gold',  gold); }
+      setText('logo', logo||'🧭⚓️');
+      setText('title', (group||'') + ' – Startticket');
+      setText('groupHeadline', group||'Startticket');
+      setText('subtitle', sub||'Fair. Verbindlich. Einfach reserviert.');
+      setText('priceBox', money(price||5));
+      if(pay){ setHref('payBtn', pay); } else $('payBtn')?.remove();
+      if(form){ setHref('formBtn', form); } else $('formBtn')?.remove();
+      if(cap){ setText('capInfo', 'Limitiert: ' + cap + ' Starttickets.'); }
+      if(String(transfer||'0')!=='1'){ $('transferNote').textContent='Keine Umbuchung und keine Übertragung. 100% Rückerstattung nur bei Teilnahme; ansonsten verfällt sie.'; }
+      if(String(donate||'1')==='1'){ $('donateInline').style.display='inline'; $('donateList').style.display='inline'; }
+      show('ticketView', true);
+    }
+
+    function showError(msg){ setText('statusMsg', msg); show('statusBox', true); }
+
+    if(!host){ show('noHost', true); }
+    else if(!WEBAPP_URL || WEBAPP_URL.includes('PASTE_WEBAPP_URL_HERE')){ show('noHost', true); showError('Konfiguration fehlt: WEBAPP_URL eintragen.'); }
+    else {
+      show('statusBox', true); setText('statusMsg','Lade Host-Daten…');
+      loadHostViaJSONP(host, (err, data)=>{
+        if(err){ showError('Fehler beim Laden der Host-Daten.'); return; }
+        if(!data || !data.ok){ showError('Ungültiger oder nicht freigeschalteter Host.'); return; }
+        show('statusBox', false); render(data);
+      });
+    }
+  </script>
+</body>
+</html>
